@@ -1562,6 +1562,7 @@ object FormMain: TFormMain
     EndPoint = 'https://oauth.vk.com/authorize'
     Permissions = [Friends, Audio]
     BaseURL = 'https://api.vk.com/method'
+    UsePseudoAsync = True
     Proxy.Port = 0
     OnAuth = VKAuth
     OnLogin = VKLogin
