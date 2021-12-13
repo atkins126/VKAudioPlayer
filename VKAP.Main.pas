@@ -327,7 +327,7 @@ function CreateAvatar(Source: TGraphic; Mask: TPngImage): TPngImage;
 implementation
 
 uses
-  VK.Audio, Vk.Types, HGM.Common.Utils, Direct2D, D2D1, Math, VK.Vcl.OAuth2, VK.Friends, Vcl.Themes, Vcl.Styles;
+  VK.Audio, Vk.Types, System.IOUtils, HGM.Common.Workspace, HGM.Common.Utils, Direct2D, D2D1, Math, VK.Vcl.OAuth2, VK.Friends, Vcl.Themes, Vcl.Styles;
 
 {$R *.dfm}
 
@@ -1369,6 +1369,9 @@ end;
 
 procedure TFormMain.TimerRefreshTimer(Sender: TObject);
 begin
+  if not FPlayer.IsInit then
+    Exit;
+
   if FPlayer.IsPlay then
   begin
     if FShowLeftTime then
@@ -1489,7 +1492,7 @@ begin
       FFriends.Clear;
       Result := False;
       try
-        if VK.Friends.Get(Users, [ufNickName, ufSex, ufPhoto50, ufStatus, ufCanSeeAudio], fsName) then
+        if VK.Friends.Get(Users, [TVkProfileField.NickName, TVkProfileField.Sex, TVkProfileField.Photo50, TVkProfileField.Status, TVkProfileField.CanSeeAudio], TVkFriendsOrder.Name) then
         begin
           try
             for i := Low(Users.Items) to High(Users.Items) do
@@ -2058,6 +2061,12 @@ procedure TFormMain.FormCreate(Sender: TObject);
 var
   i: Integer;
 begin
+  //{ $IFDEF NEEDFMX}
+  //TFormFMXCaptcha.Execute(CaptchaImg, Answer);
+  //{$ELSE}
+  //TFormCaptcha.Execute(CaptchaImg, Answer);
+  //{$ENDIF}
+
   FLoading := TDecoratePanel.Create(Self, PanelLoading, False);
   ActivityIndicatorLoading.Animate := True;
   FLoading.Open(False);
@@ -2065,11 +2074,6 @@ begin
   FPlayer := TBASSPlayer.Create(Self);
   FPlayer.OnEnd := FOnAudioEnd;
   FPlayer.OnChangeState := FOnAudioChangeState;
-  if not FPlayer.Init(Handle) then
-  begin
-    ShowMessage('Не хватает библиотек BASS');
-    Halt;
-  end;
   FPlayingId := -1;
   FAppLoading := True;
   FTerminating := False;
@@ -2121,11 +2125,17 @@ begin
   ImageListL.AddImages(ImageList);
 
   SetColors(True);
-
   ClearInfo;
   ButtonFlatMyClick(ButtonFlatMy);
   FOnAudioChangeState(nil);
   SetRepeat(prNone);
+
+  if not FPlayer.Init(Handle) then
+  begin
+    ShowMessage('Не хватает библиотек BASS');
+    Exit;
+  end;
+
   TimerEqu.Enabled := True;
 end;
 
@@ -2140,9 +2150,7 @@ begin
   FLoadPicFriends.Stop;
   FLoadPicSearch.Stop;
   FLoadPicMusic.Stop;
-  while FLoadPicMusic.IsWorking or FLoadPicSearch.IsWorking or FLoadSearch.IsWorking or FLoadPlaylist.IsWorking or
-    FLoadMusic.IsWorking or FLoadPlaylists.IsWorking or FLoadPicCurrent.IsWorking or FLoadUsers.IsWorking or
-    FLoadPicFriends.IsWorking do
+  while FLoadPicMusic.IsWorking or FLoadPicSearch.IsWorking or FLoadSearch.IsWorking or FLoadPlaylist.IsWorking or FLoadMusic.IsWorking or FLoadPlaylists.IsWorking or FLoadPicCurrent.IsWorking or FLoadUsers.IsWorking or FLoadPicFriends.IsWorking do
     Application.ProcessMessages;
 end;
 
@@ -2264,8 +2272,7 @@ begin
   FormPlayer.BringToFront;
 end;
 
-procedure TFormMain.VKAuth(Sender: TObject; Url: string; var Token: string; var TokenExpiry: Int64; var
-  ChangePasswordHash: string);
+procedure TFormMain.VKAuth(Sender: TObject; Url: string; var Token: string; var TokenExpiry: Int64; var ChangePasswordHash: string);
 begin
   if FToken.IsEmpty then
   begin
@@ -2320,7 +2327,7 @@ begin
   FToken := VK.Token;
   FSettings.SetStr('General', 'Token', FToken);
 
-  if VK.Users.Get(User, 0, [ufPhoto50]) then
+  if VK.Users.Get(User, 0, [TVkProfileField.Photo50]) then
   begin
     FVkId := User.id;
     FVkIdCurrent := FVkId;
@@ -2332,6 +2339,7 @@ begin
   end
   else
     FVkId := -1;
+  FLoading.Close;
   FAppLoading := False;
 end;
 { TAlbumThumb }
@@ -2371,6 +2379,8 @@ var
   i, ID: Integer;
   Mem: TMemoryStream;
 begin
+  if Count <= 1 then
+    Exit;
   while FSaving do
     Sleep(50);
   FSaving := True;
@@ -2709,7 +2719,7 @@ begin
 end;
 
 initialization
-  AppFolder := GetAppData + 'VKAudioPlayer\';
+  AppFolder := TPath.GetCachePath + '\VKAudioPlayer\';
   if not DirectoryExists(AppFolder) then
     if not CreateDir(AppFolder) then
       AppFolder := ExtractFilePath(Application.ExeName);
